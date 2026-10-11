@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Aura">
+<meta name="theme-color" content="#05060a">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<title>Aura</title>
+<style>
+  :root {
+    --fg: rgba(255,255,255,.92);
+    --dim: rgba(255,255,255,.55);
+    --glass: rgba(20,22,30,.45);
+    --line: rgba(255,255,255,.14);
+    --accent: #8af;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden; background: #05060a; color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", sans-serif;
+    -webkit-user-select: none; user-select: none; touch-action: none; overscroll-behavior: none;
+  }
+  canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }
+
+  #hud {
+    position: fixed; left: 0; right: 0;
+    top: calc(env(safe-area-inset-top) + 7vh);
+    text-align: center; pointer-events: none; transition: opacity .6s ease;
+  }
+  #clock {
+    font-size: clamp(64px, 14vw, 200px); font-weight: 200; letter-spacing: -.04em; line-height: 1;
+    font-variant-numeric: tabular-nums; text-shadow: 0 0 40px var(--accent);
+  }
+  #date { margin-top: 10px; font-size: clamp(15px, 2vw, 22px); color: var(--dim); letter-spacing: .08em; text-transform: uppercase; }
+  #owner { margin-top: 18px; font-size: clamp(13px, 1.6vw, 17px); color: var(--dim); letter-spacing: .3em; text-transform: uppercase; }
+  #owner b { color: var(--fg); font-weight: 600; }
+
+  #dock {
+    position: fixed; left: 50%; transform: translateX(-50%);
+    bottom: calc(env(safe-area-inset-bottom) + 22px);
+    display: flex; gap: 6px; padding: 6px; border-radius: 22px;
+    background: var(--glass); border: 1px solid var(--line);
+    -webkit-backdrop-filter: blur(24px) saturate(1.6); backdrop-filter: blur(24px) saturate(1.6);
+    transition: opacity .6s ease, transform .6s ease;
+  }
+  #dock button {
+    appearance: none; border: 0; background: transparent; color: var(--fg);
+    font: 600 14px/1 inherit; font-family: inherit; padding: 12px 16px; border-radius: 16px; min-width: 44px; min-height: 44px;
+  }
+  #dock button.on { background: rgba(255,255,255,.14); }
+  #dock .sep { width: 1px; background: var(--line); margin: 6px 2px; }
+
+  .hidden-ui #hud, .hidden-ui #dock { opacity: 0; }
+  .hidden-ui #dock { transform: translateX(-50%) translateY(20px); pointer-events: none; }
+  .hide-clock #hud { opacity: 0; }
+
+  #toast {
+    position: fixed; left: 50%; top: calc(env(safe-area-inset-top) + 18px); transform: translate(-50%, -30px);
+    padding: 10px 16px; border-radius: 14px; background: var(--glass); border: 1px solid var(--line);
+    -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
+    font-size: 14px; opacity: 0; transition: all .35s ease; pointer-events: none; white-space: nowrap;
+  }
+  #toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+  #setup {
+    position: fixed; inset: 0; display: grid; place-items: center; background: rgba(5,6,10,.6);
+    -webkit-backdrop-filter: blur(30px); backdrop-filter: blur(30px); transition: opacity .5s ease; z-index: 5;
+  }
+  #setup.gone { opacity: 0; pointer-events: none; }
+  .card { width: min(440px, calc(100vw - 32px)); padding: 32px; border-radius: 28px; background: var(--glass); border: 1px solid var(--line); text-align: center; }
+  .card h1 { margin: 0 0 6px; font-weight: 300; font-size: 40px; letter-spacing: -.02em; }
+  .card p { margin: 0 0 22px; color: var(--dim); line-height: 1.45; }
+  .card input {
+    width: 100%; padding: 14px 16px; border-radius: 14px; border: 1px solid var(--line); background: rgba(0,0,0,.35);
+    color: var(--fg); font: inherit; font-size: 18px; text-align: center; outline: none; -webkit-user-select: text; user-select: text;
+  }
+  .card button {
+    margin-top: 14px; width: 100%; padding: 14px; border-radius: 14px; border: 0; font: inherit; font-size: 17px; font-weight: 600;
+    background: var(--fg); color: #05060a;
+  }
+  .card small { display: block; margin-top: 16px; color: var(--dim); font-size: 12px; line-height: 1.5; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="hud">
+  <div id="clock">--:--</div>
+  <div id="date"></div>
+  <div id="owner"></div>
+</div>
+
+<div id="dock">
+  <button data-mode="flow" class="on">Flow</button>
+  <button data-mode="galaxy">Galaxy</button>
+  <button data-mode="rain">Rain</button>
+  <span class="sep"></span>
+  <button id="btn-tilt" title="Tilt to steer">Tilt</button>
+  <button id="btn-remix" title="New palette">Remix</button>
+  <button id="btn-clear" title="Clear ink">Clear</button>
+  <button id="btn-snap" title="Save image">Save</button>
+</div>
+
+<div id="toast"></div>
+
+<div id="setup">
+  <form class="card" id="setup-form">
+    <h1>Aura</h1>
+    <p>A living canvas that's generated from your name. No one else's iPad looks like this.</p>
+    <input id="name" placeholder="Your name" maxlength="24" autocomplete="off" autocapitalize="words" required>
+    <button type="submit">Make it mine</button>
+    <small>Fingers bend the field · Apple Pencil paints ink the particles follow<br>Tilt to steer · Double-tap to hide the controls · Two-finger long-press to rename</small>
+  </form>
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  // ---------- Identity: everything visual is seeded from the owner's name ----------
+  const store = {
+    get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+  };
+
+  function hash(str) {
+    let h = 2166136261 >>> 0;
+    for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
+    return h >>> 0;
+  }
+  function rng(seed) {
+    return () => {
+      seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+      let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+
+  let owner = store.get('aura.owner') || '';
+  let remix = +(store.get('aura.remix') || 0);
+  let palette, seed, rand;
+
+  function buildIdentity() {
+    seed = hash(owner.toLowerCase().trim() + '#' + remix);
+    rand = rng(seed);
+    const base = rand() * 360;
+    const spread = 40 + rand() * 120;
+    palette = [0, 1, 2, 3].map(i => ({
+      h: (base + i * spread / 3 + rand() * 20) % 360,
+      s: 70 + rand() * 30,
+      l: 55 + rand() * 15,
+    }));
+    const a = palette[0];
+    document.documentElement.style.setProperty('--accent', `hsla(${a.h},${a.s}%,${a.l}%,.55)`);
+    document.getElementById('owner').innerHTML = owner
+      ? `<b>${escapeHtml(owner)}</b>'s iPad · No.${(seed % 9000 + 1000)}`
+      : '';
+    buildNoise();
+  }
+  function escapeHtml(s) { return s.replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
+
+  // ---------- Seeded 2D value-gradient noise ----------
+  let perm;
+  function buildNoise() {
+    perm = new Uint8Array(512);
+    const p = Array.from({ length: 256 }, (_, i) => i);
+    for (let i = 255; i > 0; i--) { const j = (rand() * (i + 1)) | 0; [p[i], p[j]] = [p[j], p[i]]; }
+    for (let i = 0; i < 512; i++) perm[i] = p[i & 255];
+  }
+  const grad = (h, x, y) => { switch (h & 3) { case 0: return x + y; case 1: return -x + y; case 2: return x - y; default: return -x - y; } };
+  const fade = t => t * t * t * (t * (t * 6 - 15) + 10);
+  function noise(x, y) {
+    const X = Math.floor(x) & 255, Y = Math.floor(y) & 255;
+    x -= Math.floor(x); y -= Math.floor(y);
+    const u = fade(x), v = fade(y);
+    const a = perm[X] + Y, b = perm[X + 1] + Y;
+    const l1 = grad(perm[a], x, y) + u * (grad(perm[b], x - 1, y) - grad(perm[a], x, y));
+    const l2 = grad(perm[a + 1], x, y - 1) + u * (grad(perm[b + 1], x - 1, y - 1) - grad(perm[a + 1], x, y - 1));
+    return l1 + v * (l2 - l1);
+  }
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d', { alpha: false });
+  const ink = document.createElement('canvas');           // Apple Pencil layer
+  const inkCtx = ink.getContext('2d');
+  let W, H, DPR;
+
+  function resize() {
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = innerWidth; H = innerHeight;
+    for (const cv of [canvas, ink]) { cv.width = W * DPR; cv.height = H * DPR; }
+    canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    inkCtx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    ctx.fillStyle = '#05060a'; ctx.fillRect(0, 0, W, H);
+    inkField = new Float32Array(Math.ceil(W / CELL) * Math.ceil(H / CELL) * 2);
+    initParticles();
+  }
+
+  // Ink flow field: each pencil stroke writes its direction into a coarse grid.
+  const CELL = 16;
+  let inkField;
+  const inkCols = () => Math.ceil(W / CELL);
+
+  // ---------- Particles ----------
+  let particles = [];
+  let mode = store.get('aura.mode') || 'flow';
+  function particleCount() { return Math.round(Math.min(4200, (W * H) / 260)); }
+  function spawn(p) {
+    p.x = Math.random() * W; p.y = Math.random() * H;
+    p.vx = 0; p.vy = 0;
+    p.life = 200 + Math.random() * 400;
+    p.c = (Math.random() * palette.length) | 0;
+    if (mode === 'galaxy') {
+      const r = Math.sqrt(Math.random()) * Math.min(W, H) * .48, a = Math.random() * Math.PI * 2;
+      p.x = W / 2 + Math.cos(a) * r; p.y = H / 2 + Math.sin(a) * r;
+    } else if (mode === 'rain') {
+      p.y = -Math.random() * H * .3;
+    }
+    return p;
+  }
+  function initParticles() {
+    particles = Array.from({ length: particleCount() }, () => spawn({}));
+  }
+
+  // ---------- Input: touches, Apple Pencil, tilt ----------
+  const pointers = new Map();     // id -> {x, y, px, py, pen, pressure}
+  let tilt = { x: 0, y: 0 }, tiltOn = false, tiltBase = null;
+
+  canvas.addEventListener('pointerdown', e => {
+    try { canvas.setPointerCapture(e.pointerId); } catch {}
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, px: e.clientX, py: e.clientY, pen: e.pointerType === 'pen', pressure: e.pressure || .5, t: performance.now() });
+    handleGestures(e);
+  });
+  canvas.addEventListener('pointermove', e => {
+    const p = pointers.get(e.pointerId); if (!p) return;
+    const evts = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+    for (const ev of evts) {
+      p.px = p.x; p.py = p.y; p.x = ev.clientX; p.y = ev.clientY; p.pressure = ev.pressure || .5;
+      if (p.pen) paintInk(p, ev);
+    }
+  });
+  const up = e => { pointers.delete(e.pointerId); clearTimeout(renameTimer); };
+  canvas.addEventListener('pointerup', up);
+  canvas.addEventListener('pointercancel', up);
+
+  function paintInk(p, ev) {
+    const dx = p.x - p.px, dy = p.y - p.py, len = Math.hypot(dx, dy);
+    if (len < .5) return;
+    const col = palette[(performance.now() / 900 | 0) % palette.length];
+    const w = 1.2 + p.pressure * 9 * (ev.altitudeAngle !== undefined ? 1.4 - ev.altitudeAngle / Math.PI : 1);
+    inkCtx.lineCap = 'round';
+    inkCtx.strokeStyle = `hsla(${col.h},${col.s}%,${col.l + 10}%,.9)`;
+    inkCtx.shadowColor = `hsla(${col.h},100%,60%,1)`;
+    inkCtx.shadowBlur = 14;
+    inkCtx.lineWidth = w;
+    inkCtx.beginPath(); inkCtx.moveTo(p.px, p.py); inkCtx.lineTo(p.x, p.y); inkCtx.stroke();
+    // write stroke direction into the field (with a soft radius) so particles stream along the ink
+    const ux = dx / len, uy = dy / len, cols = inkCols(), R = 3;
+    const cx = p.x / CELL | 0, cy = p.y / CELL | 0;
+    for (let j = -R; j <= R; j++) for (let i = -R; i <= R; i++) {
+      const gx = cx + i, gy = cy + j; if (gx < 0 || gy < 0 || gx >= cols) continue;
+      const k = (gy * cols + gx) * 2; if (k >= inkField.length) continue;
+      const f = Math.max(0, 1 - Math.hypot(i, j) / (R + 1));
+      inkField[k] = inkField[k] * (1 - f) + ux * f * 2.4;
+      inkField[k + 1] = inkField[k + 1] * (1 - f) + uy * f * 2.4;
+    }
+  }
+
+  // double-tap toggles UI; two-finger long-press renames
+  let lastTap = 0, renameTimer;
+  function handleGestures(e) {
+    const now = performance.now();
+    if (pointers.size === 1 && e.pointerType !== 'pen') {
+      if (now - lastTap < 300) { document.body.classList.toggle('hidden-ui'); lastTap = 0; }
+      else lastTap = now;
+    }
+    if (pointers.size === 2) {
+      clearTimeout(renameTimer);
+      renameTimer = setTimeout(() => { if (pointers.size === 2) openSetup(); }, 900);
+    }
+  }
+
+  function onOrient(e) {
+    if (e.gamma == null) return;
+    // map device axes to screen axes for the current rotation
+    const a = (((screen.orientation && screen.orientation.angle) ?? window.orientation ?? 0) + 360) % 360;
+    const g = e.gamma / 45, b = e.beta / 45;
+    const [gx, gy] = a === 90 ? [b, -g] : a === 270 ? [-b, g] : a === 180 ? [-g, -b] : [g, b];
+    // the first reading after enabling is "level", so however you're holding it feels neutral
+    if (!tiltBase || tiltBase.a !== a) tiltBase = { a, x: gx, y: gy };
+    tilt.x = Math.max(-1, Math.min(1, gx - tiltBase.x)); tilt.y = Math.max(-1, Math.min(1, gy - tiltBase.y));
+  }
+  async function toggleTilt() {
+    if (!tiltOn) {
+      if (typeof DeviceOrientationEvent !== 'undefined' && DeviceOrientationEvent.requestPermission) {
+        try { if (await DeviceOrientationEvent.requestPermission() !== 'granted') return toast('Motion access denied'); }
+        catch { return toast('Motion access unavailable'); }
+      }
+      tiltBase = null; addEventListener('deviceorientation', onOrient);
+      tiltOn = true; toast('Tilt to steer');
+    } else {
+      removeEventListener('deviceorientation', onOrient);
+      tiltOn = false; tilt = { x: 0, y: 0 }; toast('Tilt off');
+    }
+    document.getElementById('btn-tilt').classList.toggle('on', tiltOn);
+  }
+
+  // ---------- Simulation ----------
+  let t = 0;
+  function step() {
+    t += 1;
+    const time = t * 0.0025;
+    // trails: translucent veil instead of clearing
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = mode === 'rain' ? 'rgba(5,6,10,.18)' : 'rgba(5,6,10,.075)';
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.globalCompositeOperation = 'lighter';
+    const touches = [...pointers.values()].filter(p => !p.pen);
+    const cols = inkCols(), scale = mode === 'galaxy' ? .0018 : .0028;
+    const cxm = W / 2, cym = H / 2;
+
+    for (const p of particles) {
+      let ax = 0, ay = 0;
+      if (mode === 'flow') {
+        const a = noise(p.x * scale, p.y * scale + time) * Math.PI * 3;
+        ax = Math.cos(a) * .35; ay = Math.sin(a) * .35;
+      } else if (mode === 'galaxy') {
+        const dx = p.x - cxm, dy = p.y - cym, d = Math.hypot(dx, dy) + 30;
+        const n = noise(p.x * scale, p.y * scale + time) * .3;
+        ax = (-dy / d) * .6 - dx / d * (.05 + n * .1); ay = (dx / d) * .6 - dy / d * (.05 + n * .1);
+      } else { // rain
+        const a = noise(p.x * .004, time * 2) * .6;
+        ax = a; ay = .55;
+      }
+      // fingers: swirl vortex + mild attraction
+      for (const f of touches) {
+        const dx = f.x - p.x, dy = f.y - p.y, d2 = dx * dx + dy * dy + 400;
+        if (d2 > 90000) continue;
+        const inv = 1400 / d2;
+        ax += (dx * .35 - dy) * inv * .02; ay += (dy * .35 + dx) * inv * .02;
+      }
+      // pencil ink field
+      const gx = p.x / CELL | 0, gy = p.y / CELL | 0;
+      if (gx >= 0 && gy >= 0 && gx < cols) {
+        const k = (gy * cols + gx) * 2;
+        if (k < inkField.length) { ax += inkField[k] * .5; ay += inkField[k + 1] * .5; }
+      }
+      ax += tilt.x * .25; ay += tilt.y * .25;
+
+      p.vx = (p.vx + ax) * .92; p.vy = (p.vy + ay) * .92;
+      const ox = p.x, oy = p.y;
+      p.x += p.vx * 2.2; p.y += p.vy * 2.2;
+      p.life--;
+      if (p.life <= 0 || p.x < -20 || p.x > W + 20 || p.y < -H || p.y > H + 20) { spawn(p); continue; }
+
+      const c = palette[p.c], sp = Math.min(1, Math.hypot(p.vx, p.vy) * .6);
+      ctx.strokeStyle = `hsla(${c.h},${c.s}%,${c.l}%,${.12 + sp * .35})`;
+      ctx.lineWidth = mode === 'rain' ? 1 : 1.1 + sp;
+      ctx.beginPath(); ctx.moveTo(ox, oy); ctx.lineTo(p.x, p.y); ctx.stroke();
+    }
+
+    // ink layer on top, slowly fading
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.drawImage(ink, 0, 0, W, H);
+    if (t % 3 === 0) {
+      inkCtx.save(); inkCtx.setTransform(1, 0, 0, 1, 0, 0);
+      inkCtx.globalCompositeOperation = 'destination-out';
+      inkCtx.fillStyle = 'rgba(0,0,0,.035)'; inkCtx.fillRect(0, 0, ink.width, ink.height);
+      inkCtx.restore();
+      for (let i = 0; i < inkField.length; i++) inkField[i] *= .996;
+    }
+    ctx.globalCompositeOperation = 'source-over';
+    requestAnimationFrame(step);
+  }
+
+  // ---------- Clock ----------
+  function tick() {
+    const d = new Date();
+    document.getElementById('clock').textContent = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).replace(/\s?[AP]M/i, '');
+    document.getElementById('date').textContent = d.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
+  }
+
+  // ---------- UI ----------
+  const toastEl = document.getElementById('toast');
+  let toastTimer;
+  function toast(msg) {
+    toastEl.textContent = msg; toastEl.classList.add('show');
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => toastEl.classList.remove('show'), 1600);
+  }
+
+  function setMode(m) {
+    mode = m; store.set('aura.mode', m);
+    document.querySelectorAll('[data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === m));
+    particles.forEach(spawn);
+    ctx.fillStyle = '#05060a'; ctx.fillRect(0, 0, W, H);
+  }
+  document.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
+  document.getElementById('btn-tilt').addEventListener('click', toggleTilt);
+  document.getElementById('btn-remix').addEventListener('click', () => {
+    remix++; store.set('aura.remix', remix); buildIdentity(); particles.forEach(spawn);
+    toast(`Palette No.${seed % 9000 + 1000}`);
+  });
+  document.getElementById('btn-clear').addEventListener('click', () => {
+    inkCtx.save(); inkCtx.setTransform(1, 0, 0, 1, 0, 0); inkCtx.clearRect(0, 0, ink.width, ink.height); inkCtx.restore();
+    inkField.fill(0); toast('Ink cleared');
+  });
+  document.getElementById('btn-snap').addEventListener('click', async () => {
+    // compose the art plus a small signature
+    const out = document.createElement('canvas'); out.width = canvas.width; out.height = canvas.height;
+    const o = out.getContext('2d'); o.drawImage(canvas, 0, 0);
+    o.scale(DPR, DPR); o.fillStyle = 'rgba(255,255,255,.6)'; o.font = '600 13px -apple-system, sans-serif';
+    o.textAlign = 'right'; o.fillText(`AURA · ${owner.toUpperCase()} · No.${seed % 9000 + 1000}`, W - 20, H - 20);
+    out.toBlob(async blob => {
+      const file = new File([blob], `aura-${Date.now()}.png`, { type: 'image/png' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try { await navigator.share({ files: [file], title: 'Aura' }); } catch {}
+      } else {
+        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = file.name; a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+      }
+    }, 'image/png');
+  });
+
+  const setup = document.getElementById('setup');
+  function openSetup() { document.getElementById('name').value = owner; setup.classList.remove('gone'); }
+  document.getElementById('setup-form').addEventListener('submit', e => {
+    e.preventDefault();
+    owner = document.getElementById('name').value.trim().slice(0, 24) || 'Mine';
+    store.set('aura.owner', owner); remix = 0; store.set('aura.remix', 0);
+    buildIdentity(); particles.forEach(spawn);
+    setup.classList.add('gone'); document.getElementById('name').blur();
+  });
+
+  // ---------- Boot ----------
+  buildIdentity();
+  resize();
+  setMode(mode);
+  if (owner) setup.classList.add('gone');
+  tick(); setInterval(tick, 1000);
+  addEventListener('resize', resize);
+  requestAnimationFrame(step);
+
+  if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});
+})();
+</script>
+</body>
+</html>
