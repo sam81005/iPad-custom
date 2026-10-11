@@ -1,7 +1,7 @@
 {
-  "name": "Aura",
-  "short_name": "Aura",
-  "description": "A living generative canvas seeded from your name.",
+  "name": "Desk",
+  "short_name": "Desk",
+  "description": "Tasks, focus timer, habits and an Apple Pencil scratchpad, on a background generated from your name.",
   "start_url": "./",
   "scope": "./",
   "display": "fullscreen",

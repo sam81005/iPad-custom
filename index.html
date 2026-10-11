@@ -6,450 +6,604 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Aura">
+<meta name="apple-mobile-web-app-title" content="Desk">
 <meta name="theme-color" content="#05060a">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
-<title>Aura</title>
+<title>Desk</title>
 <style>
   :root {
-    --fg: rgba(255,255,255,.92);
+    --bg: #05060a;
+    --fg: rgba(255,255,255,.93);
     --dim: rgba(255,255,255,.55);
-    --glass: rgba(20,22,30,.45);
-    --line: rgba(255,255,255,.14);
+    --faint: rgba(255,255,255,.08);
+    --glass: rgba(16,18,26,.55);
+    --line: rgba(255,255,255,.12);
     --accent: #8af;
+    --accent-soft: rgba(136,170,255,.18);
+    --r: 24px;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body {
-    margin: 0; height: 100%; overflow: hidden; background: #05060a; color: var(--fg);
-    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", sans-serif;
-    -webkit-user-select: none; user-select: none; touch-action: none; overscroll-behavior: none;
+    margin: 0; height: 100%; background: var(--bg); color: var(--fg); overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+    -webkit-user-select: none; user-select: none; overscroll-behavior: none;
   }
-  canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }
+  button { font: inherit; color: inherit; }
+  #bg { position: fixed; inset: 0; width: 100vw; height: 100vh; }
 
-  #hud {
-    position: fixed; left: 0; right: 0;
-    top: calc(env(safe-area-inset-top) + 7vh);
-    text-align: center; pointer-events: none; transition: opacity .6s ease;
+  main {
+    position: fixed; inset: 0; display: grid; gap: 16px;
+    padding: calc(env(safe-area-inset-top) + 16px) calc(env(safe-area-inset-right) + 16px) calc(env(safe-area-inset-bottom) + 16px) calc(env(safe-area-inset-left) + 16px);
+    grid-template-columns: minmax(280px, 1fr) minmax(300px, 1.05fr) minmax(320px, 1.35fr);
+    grid-template-rows: auto 1fr auto;
+    grid-template-areas: "today focus pad" "today focus pad" "habits focus pad";
   }
-  #clock {
-    font-size: clamp(64px, 14vw, 200px); font-weight: 200; letter-spacing: -.04em; line-height: 1;
-    font-variant-numeric: tabular-nums; text-shadow: 0 0 40px var(--accent);
+  @media (max-width: 1000px), (orientation: portrait) {
+    main {
+      overflow-y: auto; -webkit-overflow-scrolling: touch;
+      grid-template-columns: 1fr 1fr; grid-template-rows: auto auto minmax(420px, 1fr);
+      grid-template-areas: "focus today" "focus habits" "pad pad";
+    }
   }
-  #date { margin-top: 10px; font-size: clamp(15px, 2vw, 22px); color: var(--dim); letter-spacing: .08em; text-transform: uppercase; }
-  #owner { margin-top: 18px; font-size: clamp(13px, 1.6vw, 17px); color: var(--dim); letter-spacing: .3em; text-transform: uppercase; }
-  #owner b { color: var(--fg); font-weight: 600; }
+  @media (max-width: 640px) {
+    main { grid-template-columns: 1fr; grid-template-rows: none; grid-template-areas: "focus" "today" "habits" "pad"; }
+    .pad-card { min-height: 480px; }
+  }
 
-  #dock {
-    position: fixed; left: 50%; transform: translateX(-50%);
-    bottom: calc(env(safe-area-inset-bottom) + 22px);
-    display: flex; gap: 6px; padding: 6px; border-radius: 22px;
-    background: var(--glass); border: 1px solid var(--line);
-    -webkit-backdrop-filter: blur(24px) saturate(1.6); backdrop-filter: blur(24px) saturate(1.6);
-    transition: opacity .6s ease, transform .6s ease;
+  .card {
+    position: relative; display: flex; flex-direction: column; min-height: 0;
+    background: var(--glass); border: 1px solid var(--line); border-radius: var(--r); padding: 18px;
+    -webkit-backdrop-filter: blur(28px) saturate(1.5); backdrop-filter: blur(28px) saturate(1.5);
   }
-  #dock button {
-    appearance: none; border: 0; background: transparent; color: var(--fg);
-    font: 600 14px/1 inherit; font-family: inherit; padding: 12px 16px; border-radius: 16px; min-width: 44px; min-height: 44px;
+  .card h2 {
+    margin: 0 0 12px; font-size: 13px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--dim);
+    display: flex; align-items: center; gap: 8px;
   }
-  #dock button.on { background: rgba(255,255,255,.14); }
-  #dock .sep { width: 1px; background: var(--line); margin: 6px 2px; }
+  .card h2 .grow { flex: 1; }
+  .chip {
+    border: 1px solid var(--line); background: transparent; border-radius: 999px; padding: 6px 12px; min-height: 32px;
+    font-size: 13px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--fg);
+  }
+  .chip.on { background: var(--accent-soft); border-color: var(--accent); }
 
-  .hidden-ui #hud, .hidden-ui #dock { opacity: 0; }
-  .hidden-ui #dock { transform: translateX(-50%) translateY(20px); pointer-events: none; }
-  .hide-clock #hud { opacity: 0; }
+  /* ---------- Today ---------- */
+  .today-card { grid-area: today; }
+  #greet { font-size: 26px; font-weight: 600; letter-spacing: -.01em; margin: 0 0 2px; }
+  #today-date { color: var(--dim); font-size: 14px; margin-bottom: 14px; }
+  #task-form { display: flex; gap: 8px; margin-bottom: 10px; }
+  #task-input {
+    flex: 1; min-width: 0; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--line); background: rgba(0,0,0,.3);
+    color: var(--fg); font: inherit; font-size: 16px; outline: none; -webkit-user-select: text; user-select: text;
+  }
+  #task-input:focus { border-color: var(--accent); }
+  .add-btn { border: 0; border-radius: 14px; padding: 0 16px; background: var(--fg); color: var(--bg); font-weight: 700; font-size: 20px; min-width: 46px; }
+  #tasks { list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1; -webkit-overflow-scrolling: touch; }
+  #tasks li { display: flex; align-items: center; gap: 12px; padding: 10px 4px; border-bottom: 1px solid var(--faint); }
+  #tasks li.done .txt { color: var(--dim); text-decoration: line-through; }
+  #tasks .check {
+    flex: none; width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--dim); background: transparent; padding: 0;
+    display: grid; place-items: center;
+  }
+  #tasks li.done .check { background: var(--accent); border-color: var(--accent); }
+  #tasks li.done .check::after { content: ""; width: 10px; height: 6px; border: solid var(--bg); border-width: 0 0 2.5px 2.5px; transform: rotate(-45deg) translate(1px,-1px); }
+  #tasks .txt { flex: 1; font-size: 16px; line-height: 1.3; word-break: break-word; }
+  #tasks .del { border: 0; background: transparent; color: var(--dim); font-size: 22px; width: 36px; height: 36px; border-radius: 10px; }
+  #tasks .empty { color: var(--dim); border: 0; justify-content: center; padding: 24px 0; font-size: 15px; }
+  #task-meta { display: flex; justify-content: space-between; align-items: center; color: var(--dim); font-size: 13px; padding-top: 10px; }
+  #task-meta button { border: 0; background: none; color: var(--dim); padding: 6px 0; }
 
+  /* ---------- Focus ---------- */
+  .focus-card { grid-area: focus; align-items: center; text-align: center; }
+  .focus-card h2 { align-self: stretch; }
+  #clock { font-size: clamp(44px, 5.4vw, 72px); font-weight: 200; letter-spacing: -.03em; font-variant-numeric: tabular-nums; line-height: 1; margin: 2px 0 4px; }
+  #clock-sub { color: var(--dim); font-size: 13px; letter-spacing: .1em; text-transform: uppercase; margin-bottom: 8px; }
+  .ring-wrap { position: relative; width: min(100%, 280px); aspect-ratio: 1; margin: auto 0; }
+  .ring-wrap svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .ring-wrap circle { fill: none; stroke-width: 10; }
+  #ring-bg { stroke: var(--faint); }
+  #ring { stroke: var(--accent); stroke-linecap: round; transition: stroke-dashoffset .9s linear; }
+  .ring-center { position: absolute; inset: 0; display: grid; place-content: center; gap: 4px; }
+  #timer { font-size: clamp(44px, 5vw, 64px); font-weight: 300; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+  #phase { color: var(--dim); font-size: 13px; letter-spacing: .14em; text-transform: uppercase; }
+  .presets { display: flex; gap: 8px; justify-content: center; margin: 10px 0 12px; flex-wrap: wrap; }
+  .controls { display: flex; gap: 10px; justify-content: center; }
+  .big {
+    border: 0; border-radius: 18px; padding: 14px 26px; min-width: 120px; min-height: 52px; font-size: 17px; font-weight: 700;
+    background: var(--fg); color: var(--bg);
+  }
+  .big.ghost { background: var(--faint); color: var(--fg); min-width: 0; }
+  #focus-stats { margin-top: 12px; color: var(--dim); font-size: 13px; }
+  #focus-stats b { color: var(--fg); }
+
+  /* ---------- Habits ---------- */
+  .habits-card { grid-area: habits; }
+  #habits { display: grid; gap: 8px; }
+  .habit { display: grid; grid-template-columns: minmax(70px, 1fr) repeat(7, 30px); align-items: center; gap: 5px; }
+  .habit .name { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .habit .day { width: 30px; height: 30px; border-radius: 9px; border: 1px solid var(--line); background: transparent; padding: 0; font-size: 11px; color: var(--dim); }
+  .habit .day.on { background: var(--accent); border-color: var(--accent); color: var(--bg); font-weight: 700; }
+  .habit .day.today { outline: 2px solid var(--fg); outline-offset: 1px; }
+  .habit-head .day { border: 0; font-weight: 600; }
+  #habit-empty { color: var(--dim); font-size: 14px; }
+
+  /* ---------- Scratchpad ---------- */
+  .pad-card { grid-area: pad; padding-bottom: 12px; }
+  .pad-wrap { position: relative; flex: 1; border-radius: 16px; overflow: hidden; background: rgba(0,0,0,.28); border: 1px solid var(--faint); min-height: 240px; }
+  .pad-wrap.lined { background-image: linear-gradient(var(--faint) 1px, transparent 1px); background-size: 100% 34px; }
+  .pad-wrap.grid { background-image: linear-gradient(var(--faint) 1px, transparent 1px), linear-gradient(90deg, var(--faint) 1px, transparent 1px); background-size: 28px 28px; }
+  #pad { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; }
+  .tools { display: flex; gap: 4px; align-items: center; margin-top: 10px; flex-wrap: nowrap; }
+  .swatch { width: 26px; height: 26px; flex: none; border-radius: 50%; border: 2px solid transparent; padding: 0; }
+  .swatch.on { border-color: var(--fg); box-shadow: 0 0 0 2px var(--bg) inset; }
+  .tools .sp { flex: 1; }
+  .tools .chip { padding: 6px 9px; flex: none; }
+  .tools .pages { min-width: 30px; }
+  .pages { color: var(--dim); font-size: 13px; font-variant-numeric: tabular-nums; min-width: 42px; text-align: center; }
+  #pad-hint { position: absolute; inset: 0; display: grid; place-items: center; color: var(--dim); font-size: 15px; pointer-events: none; text-align: center; padding: 20px; }
+
+  /* ---------- Overlays ---------- */
   #toast {
-    position: fixed; left: 50%; top: calc(env(safe-area-inset-top) + 18px); transform: translate(-50%, -30px);
+    position: fixed; left: 50%; top: calc(env(safe-area-inset-top) + 14px); transform: translate(-50%, -30px); z-index: 20;
     padding: 10px 16px; border-radius: 14px; background: var(--glass); border: 1px solid var(--line);
-    -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
-    font-size: 14px; opacity: 0; transition: all .35s ease; pointer-events: none; white-space: nowrap;
+    -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); font-size: 14px; opacity: 0; transition: all .35s ease; pointer-events: none;
   }
   #toast.show { opacity: 1; transform: translate(-50%, 0); }
-
-  #setup {
-    position: fixed; inset: 0; display: grid; place-items: center; background: rgba(5,6,10,.6);
-    -webkit-backdrop-filter: blur(30px); backdrop-filter: blur(30px); transition: opacity .5s ease; z-index: 5;
+  .sheet {
+    position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; background: rgba(5,6,10,.55);
+    -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px); transition: opacity .3s ease;
   }
-  #setup.gone { opacity: 0; pointer-events: none; }
-  .card { width: min(440px, calc(100vw - 32px)); padding: 32px; border-radius: 28px; background: var(--glass); border: 1px solid var(--line); text-align: center; }
-  .card h1 { margin: 0 0 6px; font-weight: 300; font-size: 40px; letter-spacing: -.02em; }
-  .card p { margin: 0 0 22px; color: var(--dim); line-height: 1.45; }
-  .card input {
-    width: 100%; padding: 14px 16px; border-radius: 14px; border: 1px solid var(--line); background: rgba(0,0,0,.35);
-    color: var(--fg); font: inherit; font-size: 18px; text-align: center; outline: none; -webkit-user-select: text; user-select: text;
+  .sheet.gone { opacity: 0; pointer-events: none; }
+  .sheet form { width: min(440px, calc(100vw - 32px)); padding: 28px; border-radius: 28px; background: var(--glass); border: 1px solid var(--line); }
+  .sheet h3 { margin: 0 0 6px; font-size: 28px; font-weight: 600; }
+  .sheet p { margin: 0 0 18px; color: var(--dim); line-height: 1.45; }
+  .sheet label { display: block; font-size: 13px; color: var(--dim); margin: 12px 0 6px; }
+  .sheet input, .sheet textarea {
+    width: 100%; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--line); background: rgba(0,0,0,.35);
+    color: var(--fg); font: inherit; font-size: 16px; outline: none; -webkit-user-select: text; user-select: text; resize: none;
   }
-  .card button {
-    margin-top: 14px; width: 100%; padding: 14px; border-radius: 14px; border: 0; font: inherit; font-size: 17px; font-weight: 600;
-    background: var(--fg); color: #05060a;
-  }
-  .card small { display: block; margin-top: 16px; color: var(--dim); font-size: 12px; line-height: 1.5; }
+  .sheet .row { display: flex; gap: 10px; margin-top: 18px; }
+  .sheet .row button { flex: 1; }
 </style>
 </head>
 <body>
-<canvas id="c"></canvas>
+<canvas id="bg"></canvas>
 
-<div id="hud">
-  <div id="clock">--:--</div>
-  <div id="date"></div>
-  <div id="owner"></div>
-</div>
+<main>
+  <!-- Today -->
+  <section class="card today-card">
+    <div id="greet">Hello</div>
+    <div id="today-date"></div>
+    <form id="task-form" autocomplete="off">
+      <input id="task-input" placeholder="Add a task…" maxlength="140" enterkeyhint="done">
+      <button class="add-btn" aria-label="Add task">+</button>
+    </form>
+    <ul id="tasks"></ul>
+    <div id="task-meta"><span id="task-count"></span><button id="clear-done">Clear done</button></div>
+  </section>
 
-<div id="dock">
-  <button data-mode="flow" class="on">Flow</button>
-  <button data-mode="galaxy">Galaxy</button>
-  <button data-mode="rain">Rain</button>
-  <span class="sep"></span>
-  <button id="btn-tilt" title="Tilt to steer">Tilt</button>
-  <button id="btn-remix" title="New palette">Remix</button>
-  <button id="btn-clear" title="Clear ink">Clear</button>
-  <button id="btn-snap" title="Save image">Save</button>
-</div>
+  <!-- Focus -->
+  <section class="card focus-card">
+    <h2><span class="grow">Focus</span><button class="chip" id="btn-settings" aria-label="Settings">⚙︎</button></h2>
+    <div id="clock">--:--</div>
+    <div id="clock-sub"></div>
+    <div class="ring-wrap">
+      <svg viewBox="0 0 120 120"><circle id="ring-bg" cx="60" cy="60" r="52"/><circle id="ring" cx="60" cy="60" r="52"/></svg>
+      <div class="ring-center"><div id="timer">25:00</div><div id="phase">Ready</div></div>
+    </div>
+    <div class="presets">
+      <button class="chip on" data-min="25">25 min</button>
+      <button class="chip" data-min="50">50 min</button>
+      <button class="chip" data-min="10">10 min</button>
+    </div>
+    <div class="controls">
+      <button class="big" id="btn-start">Start</button>
+      <button class="big ghost" id="btn-reset" aria-label="Reset">↺</button>
+      <button class="big ghost" id="btn-ambient" title="Full-screen ambient mode">✦</button>
+    </div>
+    <div id="focus-stats"></div>
+  </section>
+
+  <!-- Habits -->
+  <section class="card habits-card">
+    <h2><span class="grow">Habits · this week</span><button class="chip" id="btn-habit-edit">Edit</button></h2>
+    <div id="habits"></div>
+  </section>
+
+  <!-- Scratchpad -->
+  <section class="card pad-card">
+    <h2><span class="grow">Scratchpad</span>
+      <button class="chip" data-paper="blank">Blank</button>
+      <button class="chip" data-paper="lined">Lined</button>
+      <button class="chip" data-paper="grid">Grid</button>
+    </h2>
+    <div class="pad-wrap" id="pad-wrap">
+      <canvas id="pad"></canvas>
+      <div id="pad-hint">Write with Apple Pencil<br><small>Fingers can draw too. Switch to Pencil-only in ⚙︎ to rest your palm.</small></div>
+    </div>
+    <div class="tools" id="tools">
+      <button class="swatch on" data-color="#ffffff" style="background:#fff" aria-label="White"></button>
+      <button class="swatch" data-color="#7fb2ff" style="background:#7fb2ff" aria-label="Blue"></button>
+      <button class="swatch" data-color="#ff7a90" style="background:#ff7a90" aria-label="Pink"></button>
+      <button class="swatch" data-color="#ffd166" style="background:#ffd166" aria-label="Yellow"></button>
+      <button class="swatch" data-color="#6ee7a8" style="background:#6ee7a8" aria-label="Green"></button>
+      <button class="chip" id="btn-eraser">Eraser</button>
+      <button class="chip" id="btn-undo">Undo</button>
+      <span class="sp"></span>
+      <button class="chip" id="btn-prev" aria-label="Previous page">‹</button>
+      <span class="pages" id="page-num">1/1</span>
+      <button class="chip" id="btn-next" aria-label="Next page">›</button>
+      <button class="chip" id="btn-pad-menu">⋯</button>
+    </div>
+  </section>
+</main>
 
 <div id="toast"></div>
 
-<div id="setup">
-  <form class="card" id="setup-form">
-    <h1>Aura</h1>
-    <p>A living canvas that's generated from your name. No one else's iPad looks like this.</p>
-    <input id="name" placeholder="Your name" maxlength="24" autocomplete="off" autocapitalize="words" required>
-    <button type="submit">Make it mine</button>
-    <small>Fingers bend the field · Apple Pencil paints ink the particles follow<br>Tilt to steer · Double-tap to hide the controls · Two-finger long-press to rename</small>
+<!-- First-run / settings -->
+<div class="sheet gone" id="settings">
+  <form id="settings-form">
+    <h3>Make it yours</h3>
+    <p>Your name seeds the background colors, so no other Desk looks like yours. Everything stays on this iPad.</p>
+    <label for="set-name">Name</label>
+    <input id="set-name" maxlength="24" autocapitalize="words" required>
+    <label for="set-break">Break length (minutes)</label>
+    <input id="set-break" type="number" min="1" max="30" inputmode="numeric">
+    <label><input type="checkbox" id="set-penonly" style="width:auto;margin-right:8px;vertical-align:middle">Pencil-only drawing on the scratchpad (rest your palm)</label>
+    <div class="row">
+      <button type="button" class="big ghost" id="set-remix">New colors</button>
+      <button class="big" type="submit">Done</button>
+    </div>
+  </form>
+</div>
+
+<div class="sheet gone" id="habit-sheet">
+  <form id="habit-form">
+    <h3>Habits</h3>
+    <p>One per line, up to 5. For example: Read, Water, Workout.</p>
+    <textarea id="habit-text" rows="5"></textarea>
+    <div class="row"><button type="button" class="big ghost" id="habit-cancel">Cancel</button><button class="big" type="submit">Save</button></div>
+  </form>
+</div>
+
+<div class="sheet gone" id="pad-sheet">
+  <form onsubmit="return false">
+    <h3>Page</h3>
+    <div class="row" style="flex-direction:column">
+      <button type="button" class="big" id="pad-new">New page</button>
+      <button type="button" class="big ghost" id="pad-save">Save to Photos / Files</button>
+      <button type="button" class="big ghost" id="pad-clear">Clear this page</button>
+      <button type="button" class="big ghost" id="pad-delete">Delete this page</button>
+      <button type="button" class="big ghost" id="pad-close">Close</button>
+    </div>
   </form>
 </div>
 
 <script>
 (() => {
   'use strict';
+  const $ = s => document.querySelector(s);
+  const $$ = s => [...document.querySelectorAll(s)];
 
-  // ---------- Identity: everything visual is seeded from the owner's name ----------
-  const store = {
-    get(k) { try { return localStorage.getItem(k); } catch { return null; } },
-    set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+  // ---------- Storage (everything is local to this iPad) ----------
+  const KEY = 'desk.v1';
+  const defaults = {
+    name: '', remix: 0, breakMin: 5, penOnly: false, focusMin: 25,
+    tasks: [], habits: ['Read', 'Water', 'Move'], habitLog: {}, focusLog: {},
+    pages: [null], page: 0, paper: 'lined',
   };
-
-  function hash(str) {
-    let h = 2166136261 >>> 0;
-    for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
-    return h >>> 0;
-  }
-  function rng(seed) {
-    return () => {
-      seed |= 0; seed = seed + 0x6D2B79F5 | 0;
-      let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
-      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
-      return ((t ^ t >>> 14) >>> 0) / 4294967296;
-    };
+  let S;
+  try { S = Object.assign({}, defaults, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch { S = { ...defaults }; }
+  let saveTimer;
+  function save() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      try { localStorage.setItem(KEY, JSON.stringify(S)); }
+      catch { toast('Storage full. Delete a scratchpad page.'); }
+    }, 150);
   }
 
-  let owner = store.get('aura.owner') || '';
-  let remix = +(store.get('aura.remix') || 0);
-  let palette, seed, rand;
+  const dayKey = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const esc = s => s.replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 
-  function buildIdentity() {
-    seed = hash(owner.toLowerCase().trim() + '#' + remix);
-    rand = rng(seed);
-    const base = rand() * 360;
-    const spread = 40 + rand() * 120;
-    palette = [0, 1, 2, 3].map(i => ({
-      h: (base + i * spread / 3 + rand() * 20) % 360,
-      s: 70 + rand() * 30,
-      l: 55 + rand() * 15,
-    }));
+  const toastEl = $('#toast'); let toastT;
+  function toast(m) { toastEl.textContent = m; toastEl.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => toastEl.classList.remove('show'), 1800); }
+
+  // ---------- Seeded palette (same idea as Aura) ----------
+  function hash(str) { let h = 2166136261 >>> 0; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+  function rng(seed) { return () => { seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+  let palette = [], rand;
+  function applyIdentity() {
+    rand = rng(hash((S.name || 'desk').toLowerCase().trim() + '#' + S.remix));
+    const base = rand() * 360, spread = 40 + rand() * 100;
+    palette = [0, 1, 2].map(i => ({ h: (base + i * spread / 2) % 360, s: 75 + rand() * 20, l: 60 + rand() * 10 }));
     const a = palette[0];
-    document.documentElement.style.setProperty('--accent', `hsla(${a.h},${a.s}%,${a.l}%,.55)`);
-    document.getElementById('owner').innerHTML = owner
-      ? `<b>${escapeHtml(owner)}</b>'s iPad · No.${(seed % 9000 + 1000)}`
-      : '';
-    buildNoise();
+    document.documentElement.style.setProperty('--accent', `hsl(${a.h},${a.s}%,${a.l}%)`);
+    document.documentElement.style.setProperty('--accent-soft', `hsla(${a.h},${a.s}%,${a.l}%,.2)`);
+    seedNoise();
   }
-  function escapeHtml(s) { return s.replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
 
-  // ---------- Seeded 2D value-gradient noise ----------
-  let perm;
-  function buildNoise() {
-    perm = new Uint8Array(512);
-    const p = Array.from({ length: 256 }, (_, i) => i);
-    for (let i = 255; i > 0; i--) { const j = (rand() * (i + 1)) | 0; [p[i], p[j]] = [p[j], p[i]]; }
-    for (let i = 0; i < 512; i++) perm[i] = p[i & 255];
-  }
-  const grad = (h, x, y) => { switch (h & 3) { case 0: return x + y; case 1: return -x + y; case 2: return x - y; default: return -x - y; } };
+  // ---------- Ambient background: a slow, low-power flow field ----------
+  const bg = $('#bg'), bctx = bg.getContext('2d', { alpha: false });
+  let BW, BH, parts = [], perm = new Uint8Array(512);
+  function seedNoise() { const p = Array.from({ length: 256 }, (_, i) => i); for (let i = 255; i > 0; i--) { const j = (rand() * (i + 1)) | 0; [p[i], p[j]] = [p[j], p[i]]; } for (let i = 0; i < 512; i++) perm[i] = p[i & 255]; }
   const fade = t => t * t * t * (t * (t * 6 - 15) + 10);
+  const grad = (h, x, y) => ((h & 1) ? -x : x) + ((h & 2) ? -y : y);
   function noise(x, y) {
-    const X = Math.floor(x) & 255, Y = Math.floor(y) & 255;
-    x -= Math.floor(x); y -= Math.floor(y);
-    const u = fade(x), v = fade(y);
-    const a = perm[X] + Y, b = perm[X + 1] + Y;
+    const X = Math.floor(x) & 255, Y = Math.floor(y) & 255; x -= Math.floor(x); y -= Math.floor(y);
+    const u = fade(x), v = fade(y), a = perm[X] + Y, b = perm[X + 1] + Y;
     const l1 = grad(perm[a], x, y) + u * (grad(perm[b], x - 1, y) - grad(perm[a], x, y));
     const l2 = grad(perm[a + 1], x, y - 1) + u * (grad(perm[b + 1], x - 1, y - 1) - grad(perm[a + 1], x, y - 1));
     return l1 + v * (l2 - l1);
   }
-
-  // ---------- Canvas ----------
-  const canvas = document.getElementById('c');
-  const ctx = canvas.getContext('2d', { alpha: false });
-  const ink = document.createElement('canvas');           // Apple Pencil layer
-  const inkCtx = ink.getContext('2d');
-  let W, H, DPR;
-
-  function resize() {
-    DPR = Math.min(window.devicePixelRatio || 1, 2);
-    W = innerWidth; H = innerHeight;
-    for (const cv of [canvas, ink]) { cv.width = W * DPR; cv.height = H * DPR; }
-    canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
-    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-    inkCtx.setTransform(DPR, 0, 0, DPR, 0, 0);
-    ctx.fillStyle = '#05060a'; ctx.fillRect(0, 0, W, H);
-    inkField = new Float32Array(Math.ceil(W / CELL) * Math.ceil(H / CELL) * 2);
-    initParticles();
+  function bgResize() {
+    const d = Math.min(devicePixelRatio || 1, 1.5);
+    BW = innerWidth; BH = innerHeight; bg.width = BW * d; bg.height = BH * d; bctx.setTransform(d, 0, 0, d, 0, 0);
+    bctx.fillStyle = '#05060a'; bctx.fillRect(0, 0, BW, BH);
+    parts = Array.from({ length: Math.round(Math.min(900, BW * BH / 1400)) }, () => ({ x: Math.random() * BW, y: Math.random() * BH, l: Math.random() * 300, c: (Math.random() * 3) | 0 }));
   }
-
-  // Ink flow field: each pencil stroke writes its direction into a coarse grid.
-  const CELL = 16;
-  let inkField;
-  const inkCols = () => Math.ceil(W / CELL);
-
-  // ---------- Particles ----------
-  let particles = [];
-  let mode = store.get('aura.mode') || 'flow';
-  function particleCount() { return Math.round(Math.min(4200, (W * H) / 260)); }
-  function spawn(p) {
-    p.x = Math.random() * W; p.y = Math.random() * H;
-    p.vx = 0; p.vy = 0;
-    p.life = 200 + Math.random() * 400;
-    p.c = (Math.random() * palette.length) | 0;
-    if (mode === 'galaxy') {
-      const r = Math.sqrt(Math.random()) * Math.min(W, H) * .48, a = Math.random() * Math.PI * 2;
-      p.x = W / 2 + Math.cos(a) * r; p.y = H / 2 + Math.sin(a) * r;
-    } else if (mode === 'rain') {
-      p.y = -Math.random() * H * .3;
-    }
-    return p;
-  }
-  function initParticles() {
-    particles = Array.from({ length: particleCount() }, () => spawn({}));
-  }
-
-  // ---------- Input: touches, Apple Pencil, tilt ----------
-  const pointers = new Map();     // id -> {x, y, px, py, pen, pressure}
-  let tilt = { x: 0, y: 0 }, tiltOn = false, tiltBase = null;
-
-  canvas.addEventListener('pointerdown', e => {
-    try { canvas.setPointerCapture(e.pointerId); } catch {}
-    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, px: e.clientX, py: e.clientY, pen: e.pointerType === 'pen', pressure: e.pressure || .5, t: performance.now() });
-    handleGestures(e);
-  });
-  canvas.addEventListener('pointermove', e => {
-    const p = pointers.get(e.pointerId); if (!p) return;
-    const evts = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
-    for (const ev of evts) {
-      p.px = p.x; p.py = p.y; p.x = ev.clientX; p.y = ev.clientY; p.pressure = ev.pressure || .5;
-      if (p.pen) paintInk(p, ev);
-    }
-  });
-  const up = e => { pointers.delete(e.pointerId); clearTimeout(renameTimer); };
-  canvas.addEventListener('pointerup', up);
-  canvas.addEventListener('pointercancel', up);
-
-  function paintInk(p, ev) {
-    const dx = p.x - p.px, dy = p.y - p.py, len = Math.hypot(dx, dy);
-    if (len < .5) return;
-    const col = palette[(performance.now() / 900 | 0) % palette.length];
-    const w = 1.2 + p.pressure * 9 * (ev.altitudeAngle !== undefined ? 1.4 - ev.altitudeAngle / Math.PI : 1);
-    inkCtx.lineCap = 'round';
-    inkCtx.strokeStyle = `hsla(${col.h},${col.s}%,${col.l + 10}%,.9)`;
-    inkCtx.shadowColor = `hsla(${col.h},100%,60%,1)`;
-    inkCtx.shadowBlur = 14;
-    inkCtx.lineWidth = w;
-    inkCtx.beginPath(); inkCtx.moveTo(p.px, p.py); inkCtx.lineTo(p.x, p.y); inkCtx.stroke();
-    // write stroke direction into the field (with a soft radius) so particles stream along the ink
-    const ux = dx / len, uy = dy / len, cols = inkCols(), R = 3;
-    const cx = p.x / CELL | 0, cy = p.y / CELL | 0;
-    for (let j = -R; j <= R; j++) for (let i = -R; i <= R; i++) {
-      const gx = cx + i, gy = cy + j; if (gx < 0 || gy < 0 || gx >= cols) continue;
-      const k = (gy * cols + gx) * 2; if (k >= inkField.length) continue;
-      const f = Math.max(0, 1 - Math.hypot(i, j) / (R + 1));
-      inkField[k] = inkField[k] * (1 - f) + ux * f * 2.4;
-      inkField[k + 1] = inkField[k + 1] * (1 - f) + uy * f * 2.4;
+  let bt = 0, lastFrame = 0, running = true;
+  function bgStep(now) {
+    if (!running) return;
+    requestAnimationFrame(bgStep);
+    if (now - lastFrame < 33) return;   // ~30fps is plenty for a background and saves battery
+    lastFrame = now; bt += .0015;
+    bctx.globalCompositeOperation = 'source-over'; bctx.fillStyle = 'rgba(5,6,10,.06)'; bctx.fillRect(0, 0, BW, BH);
+    bctx.globalCompositeOperation = 'lighter'; bctx.lineWidth = 1.2;
+    for (const p of parts) {
+      const a = noise(p.x * .0022, p.y * .0022 + bt) * Math.PI * 3, ox = p.x, oy = p.y;
+      p.x += Math.cos(a) * 1.1; p.y += Math.sin(a) * 1.1;
+      if (--p.l < 0 || p.x < 0 || p.x > BW || p.y < 0 || p.y > BH) { p.x = Math.random() * BW; p.y = Math.random() * BH; p.l = 200 + Math.random() * 300; continue; }
+      const c = palette[p.c]; bctx.strokeStyle = `hsla(${c.h},${c.s}%,${c.l}%,.22)`;
+      bctx.beginPath(); bctx.moveTo(ox, oy); bctx.lineTo(p.x, p.y); bctx.stroke();
     }
   }
+  document.addEventListener('visibilitychange', () => { running = !document.hidden; if (running) requestAnimationFrame(bgStep); });
 
-  // double-tap toggles UI; two-finger long-press renames
-  let lastTap = 0, renameTimer;
-  function handleGestures(e) {
-    const now = performance.now();
-    if (pointers.size === 1 && e.pointerType !== 'pen') {
-      if (now - lastTap < 300) { document.body.classList.toggle('hidden-ui'); lastTap = 0; }
-      else lastTap = now;
-    }
-    if (pointers.size === 2) {
-      clearTimeout(renameTimer);
-      renameTimer = setTimeout(() => { if (pointers.size === 2) openSetup(); }, 900);
-    }
+  // ---------- Header / clock ----------
+  function tickClock() {
+    const d = new Date(), h = d.getHours();
+    $('#clock').textContent = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).replace(/\s?[AP]M/i, '');
+    $('#clock-sub').textContent = d.toLocaleDateString([], { weekday: 'long' });
+    $('#greet').textContent = `${h < 5 ? 'Late night' : h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'}${S.name ? ', ' + S.name : ''}`;
+    $('#today-date').textContent = d.toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' });
   }
 
-  function onOrient(e) {
-    if (e.gamma == null) return;
-    // map device axes to screen axes for the current rotation
-    const a = (((screen.orientation && screen.orientation.angle) ?? window.orientation ?? 0) + 360) % 360;
-    const g = e.gamma / 45, b = e.beta / 45;
-    const [gx, gy] = a === 90 ? [b, -g] : a === 270 ? [-b, g] : a === 180 ? [-g, -b] : [g, b];
-    // the first reading after enabling is "level", so however you're holding it feels neutral
-    if (!tiltBase || tiltBase.a !== a) tiltBase = { a, x: gx, y: gy };
-    tilt.x = Math.max(-1, Math.min(1, gx - tiltBase.x)); tilt.y = Math.max(-1, Math.min(1, gy - tiltBase.y));
+  // ---------- Tasks ----------
+  function renderTasks() {
+    const ul = $('#tasks');
+    const open = S.tasks.filter(t => !t.done), done = S.tasks.filter(t => t.done);
+    ul.innerHTML = S.tasks.length ? [...open, ...done].map(t => `
+      <li class="${t.done ? 'done' : ''}" data-id="${t.id}">
+        <button class="check" aria-label="Toggle"></button>
+        <span class="txt">${esc(t.text)}</span>
+        <button class="del" aria-label="Delete">×</button>
+      </li>`).join('') : '<li class="empty">Nothing yet. What\'s the one thing for today?</li>';
+    $('#task-count').textContent = S.tasks.length ? `${done.length} of ${S.tasks.length} done` : '';
+    $('#clear-done').style.visibility = done.length ? 'visible' : 'hidden';
   }
-  async function toggleTilt() {
-    if (!tiltOn) {
-      if (typeof DeviceOrientationEvent !== 'undefined' && DeviceOrientationEvent.requestPermission) {
-        try { if (await DeviceOrientationEvent.requestPermission() !== 'granted') return toast('Motion access denied'); }
-        catch { return toast('Motion access unavailable'); }
-      }
-      tiltBase = null; addEventListener('deviceorientation', onOrient);
-      tiltOn = true; toast('Tilt to steer');
-    } else {
-      removeEventListener('deviceorientation', onOrient);
-      tiltOn = false; tilt = { x: 0, y: 0 }; toast('Tilt off');
-    }
-    document.getElementById('btn-tilt').classList.toggle('on', tiltOn);
-  }
-
-  // ---------- Simulation ----------
-  let t = 0;
-  function step() {
-    t += 1;
-    const time = t * 0.0025;
-    // trails: translucent veil instead of clearing
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.fillStyle = mode === 'rain' ? 'rgba(5,6,10,.18)' : 'rgba(5,6,10,.075)';
-    ctx.fillRect(0, 0, W, H);
-
-    ctx.globalCompositeOperation = 'lighter';
-    const touches = [...pointers.values()].filter(p => !p.pen);
-    const cols = inkCols(), scale = mode === 'galaxy' ? .0018 : .0028;
-    const cxm = W / 2, cym = H / 2;
-
-    for (const p of particles) {
-      let ax = 0, ay = 0;
-      if (mode === 'flow') {
-        const a = noise(p.x * scale, p.y * scale + time) * Math.PI * 3;
-        ax = Math.cos(a) * .35; ay = Math.sin(a) * .35;
-      } else if (mode === 'galaxy') {
-        const dx = p.x - cxm, dy = p.y - cym, d = Math.hypot(dx, dy) + 30;
-        const n = noise(p.x * scale, p.y * scale + time) * .3;
-        ax = (-dy / d) * .6 - dx / d * (.05 + n * .1); ay = (dx / d) * .6 - dy / d * (.05 + n * .1);
-      } else { // rain
-        const a = noise(p.x * .004, time * 2) * .6;
-        ax = a; ay = .55;
-      }
-      // fingers: swirl vortex + mild attraction
-      for (const f of touches) {
-        const dx = f.x - p.x, dy = f.y - p.y, d2 = dx * dx + dy * dy + 400;
-        if (d2 > 90000) continue;
-        const inv = 1400 / d2;
-        ax += (dx * .35 - dy) * inv * .02; ay += (dy * .35 + dx) * inv * .02;
-      }
-      // pencil ink field
-      const gx = p.x / CELL | 0, gy = p.y / CELL | 0;
-      if (gx >= 0 && gy >= 0 && gx < cols) {
-        const k = (gy * cols + gx) * 2;
-        if (k < inkField.length) { ax += inkField[k] * .5; ay += inkField[k + 1] * .5; }
-      }
-      ax += tilt.x * .25; ay += tilt.y * .25;
-
-      p.vx = (p.vx + ax) * .92; p.vy = (p.vy + ay) * .92;
-      const ox = p.x, oy = p.y;
-      p.x += p.vx * 2.2; p.y += p.vy * 2.2;
-      p.life--;
-      if (p.life <= 0 || p.x < -20 || p.x > W + 20 || p.y < -H || p.y > H + 20) { spawn(p); continue; }
-
-      const c = palette[p.c], sp = Math.min(1, Math.hypot(p.vx, p.vy) * .6);
-      ctx.strokeStyle = `hsla(${c.h},${c.s}%,${c.l}%,${.12 + sp * .35})`;
-      ctx.lineWidth = mode === 'rain' ? 1 : 1.1 + sp;
-      ctx.beginPath(); ctx.moveTo(ox, oy); ctx.lineTo(p.x, p.y); ctx.stroke();
-    }
-
-    // ink layer on top, slowly fading
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.drawImage(ink, 0, 0, W, H);
-    if (t % 3 === 0) {
-      inkCtx.save(); inkCtx.setTransform(1, 0, 0, 1, 0, 0);
-      inkCtx.globalCompositeOperation = 'destination-out';
-      inkCtx.fillStyle = 'rgba(0,0,0,.035)'; inkCtx.fillRect(0, 0, ink.width, ink.height);
-      inkCtx.restore();
-      for (let i = 0; i < inkField.length; i++) inkField[i] *= .996;
-    }
-    ctx.globalCompositeOperation = 'source-over';
-    requestAnimationFrame(step);
-  }
-
-  // ---------- Clock ----------
-  function tick() {
-    const d = new Date();
-    document.getElementById('clock').textContent = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).replace(/\s?[AP]M/i, '');
-    document.getElementById('date').textContent = d.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
-  }
-
-  // ---------- UI ----------
-  const toastEl = document.getElementById('toast');
-  let toastTimer;
-  function toast(msg) {
-    toastEl.textContent = msg; toastEl.classList.add('show');
-    clearTimeout(toastTimer); toastTimer = setTimeout(() => toastEl.classList.remove('show'), 1600);
-  }
-
-  function setMode(m) {
-    mode = m; store.set('aura.mode', m);
-    document.querySelectorAll('[data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === m));
-    particles.forEach(spawn);
-    ctx.fillStyle = '#05060a'; ctx.fillRect(0, 0, W, H);
-  }
-  document.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
-  document.getElementById('btn-tilt').addEventListener('click', toggleTilt);
-  document.getElementById('btn-remix').addEventListener('click', () => {
-    remix++; store.set('aura.remix', remix); buildIdentity(); particles.forEach(spawn);
-    toast(`Palette No.${seed % 9000 + 1000}`);
-  });
-  document.getElementById('btn-clear').addEventListener('click', () => {
-    inkCtx.save(); inkCtx.setTransform(1, 0, 0, 1, 0, 0); inkCtx.clearRect(0, 0, ink.width, ink.height); inkCtx.restore();
-    inkField.fill(0); toast('Ink cleared');
-  });
-  document.getElementById('btn-snap').addEventListener('click', async () => {
-    // compose the art plus a small signature
-    const out = document.createElement('canvas'); out.width = canvas.width; out.height = canvas.height;
-    const o = out.getContext('2d'); o.drawImage(canvas, 0, 0);
-    o.scale(DPR, DPR); o.fillStyle = 'rgba(255,255,255,.6)'; o.font = '600 13px -apple-system, sans-serif';
-    o.textAlign = 'right'; o.fillText(`AURA · ${owner.toUpperCase()} · No.${seed % 9000 + 1000}`, W - 20, H - 20);
-    out.toBlob(async blob => {
-      const file = new File([blob], `aura-${Date.now()}.png`, { type: 'image/png' });
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        try { await navigator.share({ files: [file], title: 'Aura' }); } catch {}
-      } else {
-        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = file.name; a.click();
-        setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-      }
-    }, 'image/png');
-  });
-
-  const setup = document.getElementById('setup');
-  function openSetup() { document.getElementById('name').value = owner; setup.classList.remove('gone'); }
-  document.getElementById('setup-form').addEventListener('submit', e => {
+  $('#task-form').addEventListener('submit', e => {
     e.preventDefault();
-    owner = document.getElementById('name').value.trim().slice(0, 24) || 'Mine';
-    store.set('aura.owner', owner); remix = 0; store.set('aura.remix', 0);
-    buildIdentity(); particles.forEach(spawn);
-    setup.classList.add('gone'); document.getElementById('name').blur();
+    const v = $('#task-input').value.trim(); if (!v) return;
+    S.tasks.unshift({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5), text: v, done: false });
+    $('#task-input').value = ''; renderTasks(); save();
+  });
+  $('#tasks').addEventListener('click', e => {
+    const li = e.target.closest('li[data-id]'); if (!li) return;
+    const t = S.tasks.find(x => x.id === li.dataset.id);
+    if (e.target.closest('.del')) S.tasks = S.tasks.filter(x => x !== t);
+    else { t.done = !t.done; if (t.done && S.tasks.every(x => x.done)) toast('All done. Nice. ✦'); }
+    renderTasks(); save();
+  });
+  $('#clear-done').addEventListener('click', () => { S.tasks = S.tasks.filter(t => !t.done); renderTasks(); save(); });
+
+  // ---------- Focus timer ----------
+  const RING = 2 * Math.PI * 52;
+  $('#ring').style.strokeDasharray = RING;
+  // timer state lives in memory but survives the app being backgrounded because it's based on an end timestamp
+  let phase = 'ready', endAt = 0, total = S.focusMin * 60, remain = total, paused = false, timerInt, wakeLock;
+
+  function fmt(s) { s = Math.max(0, Math.round(s)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; }
+  function drawTimer() {
+    $('#timer').textContent = fmt(remain);
+    $('#phase').textContent = phase === 'focus' ? (paused ? 'Paused' : 'Focus') : phase === 'break' ? (paused ? 'Paused' : 'Break') : 'Ready';
+    $('#ring').style.strokeDashoffset = RING * (1 - remain / total);
+    $('#btn-start').textContent = phase === 'ready' ? 'Start' : paused ? 'Resume' : 'Pause';
+    const mins = S.focusLog[dayKey()] || 0;
+    const streak = focusStreak();
+    $('#focus-stats').innerHTML = `<b>${mins}</b> min focused today${streak > 1 ? ` · <b>${streak}</b>-day streak` : ''}`;
+    document.title = phase === 'ready' ? 'Desk' : `${fmt(remain)} · ${phase === 'focus' ? 'Focus' : 'Break'}`;
+  }
+  function focusStreak() {
+    let n = 0; const d = new Date();
+    if (!S.focusLog[dayKey(d)]) d.setDate(d.getDate() - 1);
+    while (S.focusLog[dayKey(d)]) { n++; d.setDate(d.getDate() - 1); }
+    return n;
+  }
+  function chime(up) {
+    try {
+      const ac = new (window.AudioContext || window.webkitAudioContext)();
+      (up ? [523.25, 659.25, 783.99] : [783.99, 659.25, 523.25]).forEach((f, i) => {
+        const o = ac.createOscillator(), g = ac.createGain(), t = ac.currentTime + i * .18;
+        o.type = 'sine'; o.frequency.value = f; g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(.25, t + .02); g.gain.exponentialRampToValueAtTime(.001, t + .9);
+        o.connect(g).connect(ac.destination); o.start(t); o.stop(t + 1);
+      });
+    } catch {}
+  }
+  async function keepAwake(on) {
+    try {
+      if (on && 'wakeLock' in navigator && !wakeLock) { wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', () => wakeLock = null); }
+      if (!on && wakeLock) { await wakeLock.release(); wakeLock = null; }
+    } catch {}
+  }
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && phase !== 'ready' && !paused) keepAwake(true); });
+
+  function startPhase(p) {
+    phase = p; total = (p === 'focus' ? S.focusMin : S.breakMin) * 60; remain = total; paused = false;
+    endAt = Date.now() + total * 1000; run(); keepAwake(true);
+  }
+  function run() {
+    clearInterval(timerInt);
+    timerInt = setInterval(() => {
+      remain = (endAt - Date.now()) / 1000;
+      if (remain <= 0) {
+        if (phase === 'focus') {
+          S.focusLog[dayKey()] = (S.focusLog[dayKey()] || 0) + S.focusMin; save();
+          chime(true); toast(`${S.focusMin} minutes done. Take a ${S.breakMin}-minute break.`); startPhase('break');
+        } else { chime(false); toast('Break over. Ready when you are.'); reset(); }
+      }
+      drawTimer();
+    }, 250);
+    drawTimer();
+  }
+  function reset() { clearInterval(timerInt); phase = 'ready'; paused = false; total = remain = S.focusMin * 60; keepAwake(false); drawTimer(); }
+  $('#btn-start').addEventListener('click', () => {
+    if (phase === 'ready') return startPhase('focus');
+    if (paused) { paused = false; endAt = Date.now() + remain * 1000; run(); keepAwake(true); }
+    else { paused = true; clearInterval(timerInt); keepAwake(false); drawTimer(); }
+  });
+  $('#btn-reset').addEventListener('click', reset);
+  $$('.presets .chip').forEach(b => b.addEventListener('click', () => {
+    S.focusMin = +b.dataset.min; save();
+    $$('.presets .chip').forEach(x => x.classList.toggle('on', x === b));
+    if (phase === 'ready') reset();
+  }));
+  $('#btn-ambient').addEventListener('click', () => { location.href = 'aura.html'; });
+
+  // ---------- Habits ----------
+  function weekDays() {
+    const d = new Date(), dow = (d.getDay() + 6) % 7; d.setDate(d.getDate() - dow);   // Monday first
+    return Array.from({ length: 7 }, (_, i) => { const x = new Date(d); x.setDate(d.getDate() + i); return x; });
+  }
+  function renderHabits() {
+    const days = weekDays(), today = dayKey();
+    const head = `<div class="habit habit-head"><span></span>${days.map(d => `<span class="day ${dayKey(d) === today ? 'today' : ''}" style="outline:none;display:grid;place-items:center">${'MTWTFSS'[(d.getDay() + 6) % 7]}</span>`).join('')}</div>`;
+    $('#habits').innerHTML = S.habits.length ? head + S.habits.map((h, hi) => `
+      <div class="habit"><span class="name">${esc(h)}</span>${days.map(d => {
+        const k = dayKey(d), on = (S.habitLog[k] || []).includes(h), future = k > today;
+        return `<button class="day ${on ? 'on' : ''} ${k === today ? 'today' : ''}" data-h="${hi}" data-k="${k}" ${future ? 'disabled style="opacity:.35"' : ''}>${d.getDate()}</button>`;
+      }).join('')}</div>`).join('') : '<div id="habit-empty">Tap Edit to add habits you want to track.</div>';
+  }
+  $('#habits').addEventListener('click', e => {
+    const b = e.target.closest('button.day'); if (!b || b.disabled) return;
+    const h = S.habits[+b.dataset.h], k = b.dataset.k, list = S.habitLog[k] || (S.habitLog[k] = []);
+    const i = list.indexOf(h); i >= 0 ? list.splice(i, 1) : list.push(h);
+    renderHabits(); save();
+  });
+  $('#btn-habit-edit').addEventListener('click', () => { $('#habit-text').value = S.habits.join('\n'); $('#habit-sheet').classList.remove('gone'); });
+  $('#habit-cancel').addEventListener('click', () => $('#habit-sheet').classList.add('gone'));
+  $('#habit-form').addEventListener('submit', e => {
+    e.preventDefault();
+    S.habits = [...new Set($('#habit-text').value.split('\n').map(s => s.trim()).filter(Boolean))].slice(0, 5);
+    $('#habit-sheet').classList.add('gone'); renderHabits(); save();
+  });
+
+  // ---------- Scratchpad (Apple Pencil) ----------
+  const pad = $('#pad'), pctx = pad.getContext('2d'), wrap = $('#pad-wrap');
+  let PW, PH, PD, color = '#ffffff', erasing = false, drawing = null, undoStack = [];
+
+  function padResize() {
+    PD = Math.min(devicePixelRatio || 1, 2); PW = wrap.clientWidth; PH = wrap.clientHeight;
+    pad.width = PW * PD; pad.height = PH * PD; pctx.setTransform(PD, 0, 0, PD, 0, 0);
+    loadPage(S.pages[S.page]);
+  }
+  function loadPage(src) {
+    pctx.save(); pctx.setTransform(1, 0, 0, 1, 0, 0); pctx.clearRect(0, 0, pad.width, pad.height); pctx.restore();
+    $('#pad-hint').style.display = src ? 'none' : '';
+    if (src) { const img = new Image(); img.onload = () => pctx.drawImage(img, 0, 0, img.width / PD, img.height / PD); img.src = src; }
+    $('#page-num').textContent = `${S.page + 1}/${S.pages.length}`;
+  }
+  function storePage() { S.pages[S.page] = pad.toDataURL('image/png'); save(); }
+
+  pad.addEventListener('pointerdown', e => {
+    if (S.penOnly && e.pointerType === 'touch') return;
+    if (drawing) return;
+    try { pad.setPointerCapture(e.pointerId); } catch {}
+    undoStack.push(pctx.getImageData(0, 0, pad.width, pad.height)); if (undoStack.length > 20) undoStack.shift();
+    const r = pad.getBoundingClientRect();
+    // the Pencil's barrel button (or eraser end on supported styluses) erases
+    const erase = erasing || e.button === 5 || (e.buttons & 32);
+    drawing = { id: e.pointerId, x: e.clientX - r.left, y: e.clientY - r.top, r, erase, pen: e.pointerType === 'pen' };
+    $('#pad-hint').style.display = 'none';
+  });
+  pad.addEventListener('pointermove', e => {
+    if (!drawing || e.pointerId !== drawing.id) return;
+    const ce = e.getCoalescedEvents ? e.getCoalescedEvents() : [], evs = ce.length ? ce : [e];
+    for (const ev of evs) {
+      const x = ev.clientX - drawing.r.left, y = ev.clientY - drawing.r.top;
+      const pr = drawing.pen ? (ev.pressure || .5) : .5;
+      pctx.globalCompositeOperation = drawing.erase ? 'destination-out' : 'source-over';
+      pctx.strokeStyle = color; pctx.lineCap = 'round'; pctx.lineJoin = 'round';
+      pctx.lineWidth = drawing.erase ? 26 : .8 + pr * 4.2;
+      pctx.beginPath(); pctx.moveTo(drawing.x, drawing.y); pctx.lineTo(x, y); pctx.stroke();
+      drawing.x = x; drawing.y = y;
+    }
+  });
+  const endStroke = e => { if (drawing && e.pointerId === drawing.id) { drawing = null; pctx.globalCompositeOperation = 'source-over'; storePage(); } };
+  pad.addEventListener('pointerup', endStroke); pad.addEventListener('pointercancel', endStroke);
+
+  $$('.swatch').forEach(s => s.addEventListener('click', () => {
+    color = s.dataset.color; erasing = false; $('#btn-eraser').classList.remove('on');
+    $$('.swatch').forEach(x => x.classList.toggle('on', x === s));
+  }));
+  $('#btn-eraser').addEventListener('click', () => { erasing = !erasing; $('#btn-eraser').classList.toggle('on', erasing); });
+  $('#btn-undo').addEventListener('click', () => { const img = undoStack.pop(); if (img) { pctx.putImageData(img, 0, 0); storePage(); } });
+  function goPage(i) { S.page = Math.max(0, Math.min(S.pages.length - 1, i)); undoStack = []; loadPage(S.pages[S.page]); save(); }
+  $('#btn-prev').addEventListener('click', () => goPage(S.page - 1));
+  $('#btn-next').addEventListener('click', () => goPage(S.page + 1));
+  function setPaper(p) { S.paper = p; wrap.className = 'pad-wrap ' + (p === 'blank' ? '' : p); $$('[data-paper]').forEach(b => b.classList.toggle('on', b.dataset.paper === p)); save(); }
+  $$('[data-paper]').forEach(b => b.addEventListener('click', () => setPaper(b.dataset.paper)));
+
+  const padSheet = $('#pad-sheet'), closePad = () => padSheet.classList.add('gone');
+  $('#btn-pad-menu').addEventListener('click', () => padSheet.classList.remove('gone'));
+  $('#pad-close').addEventListener('click', closePad);
+  $('#pad-new').addEventListener('click', () => { S.pages.push(null); goPage(S.pages.length - 1); closePad(); });
+  $('#pad-clear').addEventListener('click', () => { undoStack.push(pctx.getImageData(0, 0, pad.width, pad.height)); S.pages[S.page] = null; loadPage(null); save(); closePad(); });
+  $('#pad-delete').addEventListener('click', () => {
+    if (S.pages.length === 1) { S.pages = [null]; } else { S.pages.splice(S.page, 1); }
+    goPage(Math.min(S.page, S.pages.length - 1)); closePad(); toast('Page deleted');
+  });
+  $('#pad-save').addEventListener('click', () => {
+    // export on a dark background so white ink is visible in Photos
+    const out = document.createElement('canvas'); out.width = pad.width; out.height = pad.height;
+    const o = out.getContext('2d'); o.fillStyle = '#0b0c12'; o.fillRect(0, 0, out.width, out.height); o.drawImage(pad, 0, 0);
+    out.toBlob(async blob => {
+      const file = new File([blob], `note-${dayKey()}-p${S.page + 1}.png`, { type: 'image/png' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) { try { await navigator.share({ files: [file] }); } catch {} }
+      else { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = file.name; a.click(); }
+      closePad();
+    });
+  });
+
+  // ---------- Settings ----------
+  const sheet = $('#settings');
+  function openSettings() {
+    $('#set-name').value = S.name; $('#set-break').value = S.breakMin; $('#set-penonly').checked = S.penOnly;
+    sheet.classList.remove('gone');
+  }
+  $('#btn-settings').addEventListener('click', openSettings);
+  $('#set-remix').addEventListener('click', () => { S.remix++; applyIdentity(); save(); toast('New colors'); });
+  $('#settings-form').addEventListener('submit', e => {
+    e.preventDefault();
+    const nameChanged = $('#set-name').value.trim() !== S.name;
+    S.name = $('#set-name').value.trim().slice(0, 24);
+    S.breakMin = Math.max(1, Math.min(30, +$('#set-break').value || 5));
+    S.penOnly = $('#set-penonly').checked;
+    if (nameChanged) S.remix = 0;
+    applyIdentity(); tickClock(); save(); sheet.classList.add('gone');
   });
 
   // ---------- Boot ----------
-  buildIdentity();
-  resize();
-  setMode(mode);
-  if (owner) setup.classList.add('gone');
-  tick(); setInterval(tick, 1000);
-  addEventListener('resize', resize);
-  requestAnimationFrame(step);
-
+  applyIdentity();
+  bgResize(); requestAnimationFrame(bgStep);
+  tickClock(); setInterval(tickClock, 15000);
+  renderTasks(); renderHabits(); setPaper(S.paper);
+  $$('.presets .chip').forEach(b => b.classList.toggle('on', +b.dataset.min === S.focusMin));
+  reset();
+  requestAnimationFrame(padResize);
+  let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { bgResize(); padResize(); }, 150); });
+  if (!S.name) openSettings();
   if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});
 })();
 </script>
