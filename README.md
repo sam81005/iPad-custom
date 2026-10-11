@@ -14,7 +14,7 @@ A living, generative canvas for iPad. The colors, the flow field, and the serial
 
 ## Put it on your iPad
 
-1. Host it. The included workflow publishes to GitHub Pages. Turn it on under **Settings → Pages → Source: GitHub Actions**. You'll get a URL like `https://<user>.github.io/iPad-custom/`.
+1. Host it with GitHub Pages. On github.com (in Safari, not the GitHub app), go to **Settings → Pages → Build and deployment → Source: Deploy from a branch**, then pick branch `claude/custom-ipad-app-fghm3v` and folder `/ (root)` and tap **Save**. After a minute or two it's live at `https://sam81005.github.io/iPad-custom/`.
 2. Open that URL in **Safari** on the iPad.
 3. Tap **Share → Add to Home Screen**.
 4. Launch **Aura** from the Home Screen and type your name.
